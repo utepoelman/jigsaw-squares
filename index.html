@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Geometric Square Puzzle</title>
+    <style>
+        :root {
+            --piece-size: 130px; 
+            --bg-color: #f8fafc;
+            --u-red: #fca5a5;    /* cm */
+            --u-green: #86efac;  /* m */
+            --u-blue: #93c5fd;   /* mm */
+            --u-yellow: #fde047; /* km */
+            --border-color: #94a3b8;
+            --accent: #6366f1;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0; padding: 20px;
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; box-sizing: border-box;
+            user-select: none;
+        }
+
+        /* --- Game UI Wrapper --- */
+        #game-ui {
+            display: flex; flex-direction: column; align-items: center;
+            width: 100%; height: 100%;
+        }
+
+        header { text-align: center; flex-shrink: 0; margin-bottom: 10px; }
+        h1 { margin: 0 0 5px 0; color: #1e293b; font-size: 1.5rem; }
+        p.subtitle { color: #64748b; margin: 0; font-size: 0.9rem; }
+
+        .toolbar {
+            flex-shrink: 0; display: flex; gap: 15px; margin-bottom: 10px;
+            background: white; padding: 8px 25px; border-radius: 50px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+
+        .btn {
+            padding: 6px 16px; border: none; border-radius: 20px;
+            font-weight: 600; cursor: pointer; font-size: 13px;
+            background: #e2e8f0; color: #334155; transition: all 0.2s;
+        }
+        .btn:hover { filter: brightness(0.95); transform: translateY(-1px); }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-outline { background: transparent; border: 2px solid #cbd5e1; color: #64748b; }
+
+        .color-legend { 
+            flex-shrink: 0; display: flex; justify-content: center; gap: 15px; 
+            margin-bottom: 10px; font-size: 13px; 
+        }
+        .dot { width: 12px; height: 12px; display: inline-block; border-radius: 2px; border: 1px solid #999; margin-right: 5px; vertical-align: middle; }
+
+        .game-view {
+            display: flex; flex: 1; width: 100%; max-width: 1600px;
+            gap: 20px; overflow: hidden; padding-bottom: 10px;
+            height: calc(100vh - 160px);
+        }
+
+        .workspace-area {
+            flex: 1; background: white; border: 3px dashed #cbd5e1;
+            border-radius: 16px; position: relative; overflow: hidden;
+            min-width: 300px; box-shadow: inset 0 0 20px rgba(0,0,0,0.02);
+        }
+
+        .grid-wrapper {
+            flex-shrink: 0; padding: 15px; background: #cbd5e1;
+            border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            overflow: auto;
+        }
+
+        #puzzle-grid {
+            display: grid;
+            grid-template-columns: repeat(4, var(--piece-size));
+            grid-template-rows: repeat(4, var(--piece-size));
+            gap: 4px;
+        }
+
+        .grid-slot {
+            width: var(--piece-size); height: var(--piece-size);
+            background-color: rgba(255,255,255,0.5); border-radius: 4px;
+            position: relative;
+        }
+
+        /* --- Piece Styles --- */
+        .piece {
+            width: var(--piece-size); height: var(--piece-size);
+            background: white; border: 1px solid var(--border-color);
+            box-sizing: border-box; position: absolute; z-index: 10;
+            cursor: grab; transition: box-shadow 0.2s;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+        }
+        .piece.selected { box-shadow: 0 0 0 4px var(--accent); z-index: 50; }
+        .piece:active { cursor: grabbing; }
+
+        /* --- Edges & Shapes --- */
+        .edge-group {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        .shape {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0.9;
+        }
+        .u-blank .shape { display: none; }
+        .u-cm .shape { background-color: var(--u-red); }
+        .u-m  .shape { background-color: var(--u-green); }
+        .u-km .shape { background-color: var(--u-yellow); }
+        .u-mm .shape { background-color: var(--u-blue); }
+
+        .pos-top .shape { clip-path: polygon(24.65% 0%, 75.35% 0%, 62.6% 30.6%, 19.4% 12.6%); }
+        .pos-right .shape { clip-path: polygon(100% 24.65%, 100% 75.35%, 69.4% 62.6%, 87.4% 19.4%); }
+        .pos-bottom .shape { clip-path: polygon(75.35% 100%, 24.65% 100%, 37.4% 69.4%, 80.6% 87.4%); }
+        .pos-left .shape { clip-path: polygon(0% 75.35%, 0% 24.65%, 30.6% 37.4%, 12.6% 80.6%); }
+
+        .text-label {
+            position: absolute;
+            display: flex; flex-direction: column; 
+            align-items: center; justify-content: center;
+            width: 100px; height: 40px;
+            text-align: center; z-index: 20; color: #1e293b;
+        }
+        .line-1 { font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.1; }
+        .line-2 { font-size: 11px; font-weight: bold; font-family: 'Arial', sans-serif; line-height: 1.1; margin-top: 1px;}
+
+        /* Text Orientation */
+        .pos-top .text-label { top: 2px; left: 50%; transform: translateX(-50%) rotate(180deg); }
+        .pos-bottom .text-label { bottom: 2px; left: 50%; transform: translateX(-50%); }
+        .pos-right .text-label { right: -28px; top: 50%; transform: translateY(-50%) rotate(-90deg); }
+        .pos-left .text-label { left: -28px; top: 50%; transform: translateY(-50%) rotate(90deg); }
+        .u-blank .text-label { display: none; }
+
+        /* --- Certificate View --- */
+        #certificate-view {
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            width: 100%; height: 100vh;
+        }
+
+        #certificate-paper {
+            background: white; padding: 30px; border: 8px double #ca8a04;
+            text-align: center; 
+            max-width: 600px; /* Reduced to fit A4 Portrait */
+            width: 90%;
+            position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+
+        .cert-title { font-family: 'Georgia', serif; font-size: 36px; color: #ca8a04; margin-bottom: 15px; font-weight: bold;}
+        .cert-body { font-family: 'Georgia', serif; font-size: 20px; line-height: 1.6; color: #333; margin: 30px 0; }
+        .cert-name { font-size: 28px; font-weight: bold; border-bottom: 2px solid #333; display: inline-block; min-width: 250px; margin: 10px 0; font-family: 'Segoe UI', sans-serif; color: #000;}
+        .cert-stats { font-size: 15px; color: #666; margin-top: 40px; border-top: 1px solid #eee; padding-top: 15px; font-family: 'Segoe UI', sans-serif;}
+        .watermark {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 180px; opacity: 0.04; font-weight: bold; pointer-events: none;
+            color: #ca8a04; font-family: serif;
+        }
+
+        #cert-actions { margin-top: 25px; display: flex; gap: 15px; }
+
+        @media print {
+            body { background: white; height: auto; display: block; }
+            #game-ui, .modal-overlay, #cert-actions { display: none !important; }
+            #certificate-view { display: flex !important; height: auto; margin-top: 20px; justify-content: flex-start; }
+            #certificate-paper { 
+                box-shadow: none; 
+                border: 8px double #ca8a04; 
+                width: 90%; 
+                max-width: 600px; /* Force small width for A4 Portrait */
+                margin: 0 auto; 
+            }
+        }
+
+        /* --- Modals --- */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 300;
+            display: none; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .modal-box {
+            background: white; padding: 30px; border-radius: 16px;
+            max-width: 500px; width: 90%; text-align: left;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+            /* Scrolling Logic */
+            max-height: 80vh; overflow-y: auto;
+        }
+        .modal-box h2 { margin-top: 0; color: #1e293b; }
+        .modal-box h3 { margin: 15px 0 5px 0; color: #334155; font-size: 16px; font-weight: bold; }
+        .modal-box p, .modal-box li { font-size: 14px; line-height: 1.5; color: #475569; }
+        .modal-box ul { padding-left: 20px; margin: 5px 0 15px 0; }
+        
+        .terms-section { border-top: 1px solid #e2e8f0; margin-top: 20px; padding-top: 10px; }
+        .terms-section h4 { font-size: 13px; color: #64748b; margin: 15px 0 5px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+        .terms-section p { font-size: 12px; color: #64748b; margin-bottom: 10px; }
+        .terms-section li { font-size: 12px; color: #64748b; }
+
+        input[type="text"] {
+            width: 80%; padding: 10px; margin: 15px 0;
+            border: 2px solid #cbd5e1; border-radius: 8px; font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-ui">
+        <header>
+            <h1>Square Measurement Puzzle</h1>
+            <p class="subtitle">Drag to move • Spacebar or Double-Click to Rotate</p>
+        </header>
+
+        <div class="toolbar">
+            <button class="btn btn-outline" onclick="toggleHelp()">Rules</button>
+            <button class="btn" onclick="resetPuzzle()">Reset Puzzle</button>
+            <button class="btn btn-primary" onclick="initNewGame()">New Numbers</button>
+        </div>
+
+        <div class="color-legend">
+            <span><span class="dot" style="background:var(--u-blue)"></span>mm</span>
+            <span><span class="dot" style="background:var(--u-red)"></span>cm</span>
+            <span><span class="dot" style="background:var(--u-green)"></span>m</span>
+            <span><span class="dot" style="background:var(--u-yellow)"></span>km</span>
+        </div>
+
+        <div class="game-view" id="gameView">
+            <div class="workspace-area" id="workspace" onclick="backgroundClick(event)">
+                <div style="position:absolute; top:10px; left:10px; color:#cbd5e1; font-weight:bold; pointer-events:none;">Workspace</div>
+            </div>
+            <div class="grid-wrapper">
+                <div id="puzzle-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="certificate-view">
+        <div id="certificate-paper">
+            <div class="watermark">✔</div>
+            <div class="cert-title">Certificate of Completion</div>
+            <div class="cert-body">
+                This is to certify that<br>
+                <div class="cert-name" id="cert-name-display">Student Name</div><br>
+                has correctly solved the<br>
+                <strong>Square Measurement Puzzle</strong>.
+            </div>
+            <div class="cert-stats">
+                Date: <span id="cert-date"></span> &nbsp; | &nbsp; 
+                Time Taken: <span id="cert-time"></span>
+            </div>
+        </div>
+        <div id="cert-actions">
+            <button class="btn btn-outline" onclick="window.print()">Print / Save PDF</button>
+            <button class="btn btn-primary" onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="helpModal">
+        <div class="modal-box">
+            <h2>How to Play</h2>
+            
+            <h3>Goal</h3>
+            <p>Form a 4x4 grid by matching the edges of the puzzle pieces.</p>
+            
+            <h3>Matching Maths</h3>
+            <p>Two edges match if they describe the <strong>same square</strong>. You might need to match different properties of that square:</p>
+            <ul>
+                <li><strong>Side Length</strong> (e.g., Side = 10 cm)</li>
+                <li><strong>Perimeter</strong> (e.g., 4 × 10 = 40 cm)</li>
+                <li><strong>Area</strong> (e.g., 10 × 10 = 100 cm²)</li>
+            </ul>
+            <p><em>Example: An edge showing "Side 10 cm" will connect to an edge showing "Perimeter 40 cm".</em></p>
+
+            <h3>Color Hints</h3>
+            <p>The colors represent units. You will always connect edges of the same color.</p>
+            <ul>
+                <li><span class="dot" style="background:var(--u-blue)"></span> <strong>Blue</strong> = Millimetres (mm)</li>
+                <li><span class="dot" style="background:var(--u-red)"></span> <strong>Red</strong> = Centimetres (cm)</li>
+                <li><span class="dot" style="background:var(--u-green)"></span> <strong>Green</strong> = Metres (m)</li>
+                <li><span class="dot" style="background:var(--u-yellow)"></span> <strong>Yellow</strong> = Kilometres (km)</li>
+            </ul>
+
+            <h3>Controls</h3>
+            <ul>
+                <li><strong>Drag</strong> pieces to move them.</li>
+                <li><strong>Click</strong> a piece to select it.</li>
+                <li><strong>Spacebar</strong> or <strong>Double-Click</strong> to rotate the selected piece.</li>
+            </ul>
+
+            <div style="text-align: center; margin: 20px 0;">
+                <button class="btn btn-primary" onclick="toggleHelp()">Start Puzzle</button>
+            </div>
+
+            <div class="terms-section">
+                <h3 style="color:#64748b; font-size:14px; margin-bottom:5px;">Terms of Use</h3>
+                
+                <h4>Ownership and Copyright</h4>
+                <p>This game, including all code, assets, artwork, and sound, is the intellectual property of <strong>Ute Poelman</strong>. All rights are reserved.</p>
+
+                <h4>Licence to Use</h4>
+                <p>Subject to these terms, the author grants you a personal, non-exclusive, non-transferable licence to access and play the game for your own private, non-commercial entertainment.</p>
+                <p><strong>Educational use is explicitly permitted:</strong> Teachers, schools, and educational institutions may use this game in classroom settings and share it with students for teaching purposes at no cost.</p>
+
+                <h4>Restrictions</h4>
+                <p>You are strictly prohibited from:</p>
+                <ul>
+                    <li>Modifying the source code, assets, or logic of this game.</li>
+                    <li>Redistributing or "mirroring" the game files on other websites without express written permission.</li>
+                    <li>Selling or commercialising the game or any derivative works based upon it.</li>
+                    <li>Removing any copyright notices or branding from the source code or game interface.</li>
+                </ul>
+
+                <h4>Disclaimer</h4>
+                <p>The game is provided "as is," without warranty of any kind. The author is not liable for any damages arising from the use of this software.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="winModal">
+        <div class="modal-box" style="text-align: center;">
+            <h2 style="color:var(--u-green)">🎉 Fantastic Work!</h2>
+            <p>You have solved the puzzle!</p>
+            <p>Enter your name for the certificate:</p>
+            <input type="text" id="studentName" placeholder="Your Name" maxlength="25">
+            <br>
+            <button class="btn btn-primary" onclick="generateCertificate()">Get Certificate</button>
+        </div>
+    </div>
+
+<script>
+    const ROWS = 4;
+    const COLS = 4;
+    const PIECE_SIZE = 130;
+    
+    let pieces = []; 
+    let selectedPieceId = null;
+    let timerStart = null;
+    let timerActive = false;
+    
+    // --- Custom Drag Globals ---
+    let isDragging = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let draggedPiece = null;
+    let grabOffset = { x: 0, y: 0 };
+    let originalParent = null; 
+    const DRAG_THRESHOLD = 5;
+
+    function getNumbersForUnit() {
+        const pool = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 15, 20, 25, 50, 100];
+        return pool.sort(() => Math.random() - 0.5).slice(0, 6);
+    }
+
+    function createMathPair(side, unit) {
+        const p = side * 4;
+        const a = side * side;
+        const options = [
+            { label: "Side", value: `${side} ${unit}` },
+            { label: "Perimeter", value: `${p} ${unit}` },
+            { label: "Area", value: `${a} ${unit}²` }
+        ];
+        options.sort(() => Math.random() - 0.5);
+        return { valA: options[0], valB: options[1] };
+    }
+
+    function generatePuzzleData() {
+        const numsM = getNumbersForUnit();
+        const numsCm = getNumbersForUnit();
+        const numsKm = getNumbersForUnit();
+        const numsMm = getNumbersForUnit();
+
+        let vEdges = [], hEdges = []; 
+        
+        for(let r=0; r<ROWS-1; r++) {
+            vEdges[r] = [];
+            for(let c=0; c<COLS; c++) {
+                const useGreen = (r + c) % 2 === 0; 
+                const side = useGreen ? numsM.pop() : numsCm.pop();
+                const unit = useGreen ? 'm' : 'cm';
+                const color = useGreen ? 'u-m' : 'u-cm';
+                const pair = createMathPair(side, unit);
+                vEdges[r][c] = { matchId: `v-${r}-${c}`, color: color, ...pair };
+            }
+        }
+
+        for(let r=0; r<ROWS; r++) {
+            hEdges[r] = [];
+            for(let c=0; c<COLS-1; c++) {
+                const useBlue = (r + c) % 2 === 0;
+                const side = useBlue ? numsMm.pop() : numsKm.pop();
+                const unit = useBlue ? 'mm' : 'km';
+                const color = useBlue ? 'u-mm' : 'u-km';
+                const pair = createMathPair(side, unit);
+                hEdges[r][c] = { matchId: `h-${r}-${c}`, color: color, ...pair };
+            }
+        }
+
+        let tempPieces = [];
+        let pIndex = 0;
+        for(let r=0; r<ROWS; r++) {
+            for(let c=0; c<COLS; c++) {
+                let top = { label: '', value: '', color: 'u-blank', id: 'border' };
+                if(r > 0) { const e = vEdges[r-1][c]; top = { label: e.valB.label, value: e.valB.value, color: e.color, id: e.matchId }; }
+
+                let bottom = { label: '', value: '', color: 'u-blank', id: 'border' };
+                if(r < ROWS-1) { const e = vEdges[r][c]; bottom = { label: e.valA.label, value: e.valA.value, color: e.color, id: e.matchId }; }
+
+                let left = { label: '', value: '', color: 'u-blank', id: 'border' };
+                if(c > 0) { const e = hEdges[r][c-1]; left = { label: e.valB.label, value: e.valB.value, color: e.color, id: e.matchId }; }
+
+                let right = { label: '', value: '', color: 'u-blank', id: 'border' };
+                if(c < COLS-1) { const e = hEdges[r][c]; right = { label: e.valA.label, value: e.valA.value, color: e.color, id: e.matchId }; }
+
+                tempPieces.push({
+                    id: `p-${pIndex}`,
+                    rotation: Math.floor(Math.random() * 4),
+                    values: [ top, right, bottom, left ]
+                });
+                pIndex++;
+            }
+        }
+        return tempPieces;
+    }
+
+    function initNewGame() {
+        pieces = generatePuzzleData();
+        resetPuzzle(); 
+    }
+
+    function resetPuzzle() {
+        const grid = document.getElementById('puzzle-grid');
+        const workspace = document.getElementById('workspace');
+        grid.innerHTML = '';
+        workspace.innerHTML = '<div style="position:absolute; top:10px; left:10px; color:#cbd5e1; font-weight:bold; pointer-events:none;">Workspace</div>';
+        timerStart = null; timerActive = false;
+
+        const shuffled = [...pieces].sort(() => Math.random() - 0.5);
+
+        for(let i=0; i<16; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'grid-slot';
+            slot.id = `slot-${i}`;
+            grid.appendChild(slot);
+        }
+
+        const wWidth = workspace.clientWidth || 400;
+        const wHeight = workspace.clientHeight || 600;
+
+        shuffled.forEach((p, i) => {
+            p.rotation = Math.floor(Math.random() * 4);
+            const el = createPieceDOM(p);
+            const maxLeft = Math.max(0, wWidth - PIECE_SIZE - 10);
+            const maxTop = Math.max(0, wHeight - PIECE_SIZE - 10);
+            const randX = Math.random() * maxLeft;
+            const randY = Math.random() * maxTop;
+            el.style.left = randX + 'px';
+            el.style.top = randY + 'px';
+            workspace.appendChild(el);
+        });
+    }
+
+    function createPieceDOM(data) {
+        const div = document.createElement('div');
+        div.className = 'piece';
+        div.id = data.id;
+        div.style.transform = `rotate(${data.rotation * 90}deg)`;
+        
+        div.addEventListener('mousedown', handleMouseDown);
+        div.addEventListener('dblclick', (e) => { e.stopPropagation(); rotatePiece(data.id); });
+
+        const dirs = ['top', 'right', 'bottom', 'left'];
+        data.values.forEach((val, idx) => {
+            const group = document.createElement('div');
+            group.className = `edge-group pos-${dirs[idx]} ${val.color}`;
+            const shape = document.createElement('div');
+            shape.className = 'shape';
+            group.appendChild(shape);
+
+            const textWrap = document.createElement('div');
+            textWrap.className = 'text-label';
+            const line1 = document.createElement('div');
+            line1.className = 'line-1';
+            line1.innerText = val.label;
+            const line2 = document.createElement('div');
+            line2.className = 'line-2';
+            line2.innerText = val.value;
+            textWrap.appendChild(line1);
+            textWrap.appendChild(line2);
+            group.appendChild(textWrap);
+            div.appendChild(group);
+        });
+        return div;
+    }
+
+    // --- Custom Drag Implementation ---
+
+    function handleMouseDown(e) {
+        if(e.button !== 0) return; // Only Left Click
+        e.preventDefault();
+
+        draggedPiece = e.currentTarget;
+        originalParent = draggedPiece.parentNode;
+
+        selectPiece(e, draggedPiece.id);
+
+        const rect = draggedPiece.getBoundingClientRect();
+        grabOffset.x = e.clientX - rect.left;
+        grabOffset.y = e.clientY - rect.top;
+
+        isDragging = false;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    function handleMouseMove(e) {
+        if (!draggedPiece) return;
+
+        if (!isDragging) {
+            const dist = Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY);
+            if (dist < DRAG_THRESHOLD) return;
+            isDragging = true;
+            startDragLogic();
+        }
+
+        draggedPiece.style.left = (e.clientX - grabOffset.x) + 'px';
+        draggedPiece.style.top = (e.clientY - grabOffset.y) + 'px';
+    }
+
+    function startDragLogic() {
+        if (!timerActive) { timerStart = Date.now(); timerActive = true; }
+        
+        document.body.appendChild(draggedPiece);
+        draggedPiece.style.position = 'fixed';
+        draggedPiece.style.zIndex = 1000;
+        
+        draggedPiece.style.width = PIECE_SIZE + 'px';
+        draggedPiece.style.height = PIECE_SIZE + 'px';
+    }
+
+    function handleMouseUp(e) {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+
+        if (!isDragging) {
+            draggedPiece = null;
+            return;
+        }
+
+        dropPiece(e.clientX, e.clientY);
+        draggedPiece = null;
+        isDragging = false;
+        originalParent = null;
+    }
+
+    function dropPiece(mouseX, mouseY) {
+        const pieceRect = draggedPiece.getBoundingClientRect();
+        const centerX = pieceRect.left + pieceRect.width/2;
+        const centerY = pieceRect.top + pieceRect.height/2;
+
+        const slots = document.querySelectorAll('.grid-slot');
+        let bestSlot = null;
+        let minDist = Infinity;
+
+        slots.forEach(slot => {
+            const r = slot.getBoundingClientRect();
+            const cx = r.left + r.width/2;
+            const cy = r.top + r.height/2;
+            const dist = Math.hypot(cx - centerX, cy - centerY);
+            
+            if (dist < 60 && dist < minDist) {
+                minDist = dist;
+                bestSlot = slot;
+            }
+        });
+
+        if (bestSlot) {
+            if (bestSlot.children.length > 0) {
+                const resident = bestSlot.children[0];
+                if (originalParent.classList.contains('grid-slot')) {
+                    mountToSlot(resident, originalParent); 
+                } else {
+                    mountToWorkspace(resident, 20, 20); 
+                }
+            }
+            mountToSlot(draggedPiece, bestSlot);
+        } else {
+            const ws = document.getElementById('workspace');
+            const wsRect = ws.getBoundingClientRect();
+            let relX = pieceRect.left - wsRect.left;
+            let relY = pieceRect.top - wsRect.top;
+            relX = Math.max(0, Math.min(relX, wsRect.width - PIECE_SIZE));
+            relY = Math.max(0, Math.min(relY, wsRect.height - PIECE_SIZE));
+            mountToWorkspace(draggedPiece, relX, relY);
+        }
+
+        if(isGridFull()) autoCheckWin();
+    }
+
+    function mountToSlot(piece, slot) {
+        piece.style.position = 'static';
+        piece.style.left = ''; 
+        piece.style.top = '';
+        piece.style.transform = `rotate(${getPieceData(piece.id).rotation * 90}deg)`;
+        piece.style.zIndex = '';
+        slot.appendChild(piece);
+    }
+
+    function mountToWorkspace(piece, x, y) {
+        const ws = document.getElementById('workspace');
+        ws.appendChild(piece);
+        piece.style.position = 'absolute';
+        piece.style.left = x + 'px';
+        piece.style.top = y + 'px';
+        piece.style.transform = `rotate(${getPieceData(piece.id).rotation * 90}deg)`;
+        piece.style.zIndex = '';
+    }
+    
+    // --- Helper Functions ---
+
+    function selectPiece(e, id) {
+        e.stopPropagation();
+        document.querySelectorAll('.piece.selected').forEach(el => el.classList.remove('selected'));
+        const el = document.getElementById(id);
+        el.classList.add('selected');
+        selectedPieceId = id;
+    }
+
+    function backgroundClick(e) {
+        if(e.target.id === 'workspace') {
+            document.querySelectorAll('.piece.selected').forEach(el => el.classList.remove('selected'));
+            selectedPieceId = null;
+        }
+    }
+
+    function getPieceData(id) {
+        return pieces.find(p => p.id === id);
+    }
+
+    function rotatePiece(id) {
+        if(!id) return;
+        const pData = getPieceData(id);
+        pData.rotation = (pData.rotation + 1) % 4;
+        const el = document.getElementById(id);
+        el.style.transform = `rotate(${pData.rotation * 90}deg)`;
+        if(isGridFull()) autoCheckWin();
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            e.preventDefault(); 
+            if(selectedPieceId) rotatePiece(selectedPieceId);
+        }
+    });
+
+    function isGridFull() { return document.querySelectorAll('.grid-slot .piece').length === 16; }
+
+    function getPieceAt(r, c) {
+        const idx = r * COLS + c;
+        const slot = document.getElementById(`slot-${idx}`);
+        if(slot && slot.children.length > 0) return pieces.find(p => p.id === slot.children[0].id);
+        return null;
+    }
+    function getEdgeData(pData, absDir) {
+        const index = (absDir - pData.rotation + 4) % 4;
+        return pData.values[index];
+    }
+    function autoCheckWin() {
+        let correct = true;
+        for(let r=0; r<ROWS-1; r++) {
+            for(let c=0; c<COLS; c++) {
+                const pTop = getPieceAt(r, c);
+                const pBtm = getPieceAt(r+1, c);
+                const e1 = getEdgeData(pTop, 2);
+                const e2 = getEdgeData(pBtm, 0);
+                if(e1.id !== e2.id || e1.id === 'border') correct = false;
+            }
+        }
+        for(let r=0; r<ROWS; r++) {
+            for(let c=0; c<COLS-1; c++) {
+                const pLeft = getPieceAt(r, c);
+                const pRight = getPieceAt(r, c+1);
+                const e1 = getEdgeData(pLeft, 1);
+                const e2 = getEdgeData(pRight, 3);
+                if(e1.id !== e2.id || e1.id === 'border') correct = false;
+            }
+        }
+        for(let c=0; c<COLS; c++) { if(getEdgeData(getPieceAt(0,c), 0).id !== 'border') correct = false; }
+        for(let c=0; c<COLS; c++) { if(getEdgeData(getPieceAt(ROWS-1,c), 2).id !== 'border') correct = false; }
+        for(let r=0; r<ROWS; r++) { if(getEdgeData(getPieceAt(r,0), 3).id !== 'border') correct = false; }
+        for(let r=0; r<ROWS; r++) { if(getEdgeData(getPieceAt(r,COLS-1), 1).id !== 'border') correct = false; }
+
+        if(correct) {
+            timerActive = false;
+            setTimeout(() => {
+                document.getElementById('winModal').style.display = 'flex';
+                document.getElementById('studentName').focus();
+            }, 300);
+        }
+    }
+
+    function generateCertificate() {
+        const name = document.getElementById('studentName').value || "Student";
+        const now = new Date();
+        const duration = Date.now() - timerStart;
+        const seconds = Math.floor((duration / 1000) % 60);
+        const minutes = Math.floor((duration / (1000 * 60)) % 60);
+        
+        document.getElementById('cert-name-display').innerText = name;
+        document.getElementById('cert-date').innerText = now.toLocaleDateString();
+        document.getElementById('cert-time').innerText = `${minutes}m ${seconds}s`;
+
+        document.getElementById('winModal').style.display = 'none';
+        document.getElementById('game-ui').style.display = 'none';
+        document.getElementById('certificate-view').style.display = 'flex';
+    }
+
+    function toggleHelp() {
+        const el = document.getElementById('helpModal');
+        el.style.display = (el.style.display === 'flex') ? 'none' : 'flex';
+    }
+
+    window.onload = () => { initNewGame(); toggleHelp(); };
+</script>
+</body>
+</html>
