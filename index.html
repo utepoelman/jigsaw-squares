@@ -136,6 +136,32 @@
         .pos-left .text-label { left: -28px; top: 50%; transform: translateY(-50%) rotate(90deg); }
         .u-blank .text-label { display: none; }
 
+        /* --- Printable Worksheet Modal Styles --- */
+        .print-modal-box {
+            max-width: 650px;
+            width: 95%;
+        }
+        .print-header { text-align: center; margin-bottom: 10px; }
+        .print-title { margin: 0 0 5px 0; color: #1e293b; font-size: 1.4rem; }
+        .print-subtitle { color: #475569; margin: 0 0 10px 0; font-size: 0.85rem; line-height: 1.3; }
+        .print-color-legend { 
+            display: flex; justify-content: center; gap: 15px; 
+            margin-bottom: 12px; font-size: 12px; 
+        }
+
+        #print-puzzle-grid {
+            display: grid;
+            grid-template-columns: repeat(4, var(--piece-size));
+            grid-template-rows: repeat(4, var(--piece-size));
+            gap: 0;
+            border: 2px solid #1e293b;
+            background: white;
+            margin: 0 auto;
+            width: calc(var(--piece-size) * 4);
+            height: calc(var(--piece-size) * 4);
+            box-sizing: content-box;
+        }
+
         /* --- Certificate View --- */
         #certificate-view {
             display: none; flex-direction: column; align-items: center; justify-content: center;
@@ -163,15 +189,89 @@
         #cert-actions { margin-top: 25px; display: flex; gap: 15px; }
 
         @media print {
-            body { background: white; height: auto; display: block; }
-            #game-ui, .modal-overlay, #cert-actions { display: none !important; }
-            #certificate-view { display: flex !important; height: auto; margin-top: 20px; justify-content: flex-start; }
-            #certificate-paper { 
+            @page {
+                size: A4 portrait;
+                margin: 1cm;
+            }
+            body { 
+                background: white !important; 
+                height: auto !important; 
+                margin: 0 !important; 
+                padding: 0 !important; 
+                display: block !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            #game-ui, .modal-overlay, #cert-actions, .no-print { display: none !important; }
+
+            /* Certificate Mode */
+            body.mode-certificate #certificate-view { display: flex !important; height: auto; margin-top: 20px; justify-content: flex-start; }
+            body.mode-certificate #certificate-paper { 
                 box-shadow: none; 
                 border: 8px double #ca8a04; 
                 width: 90%; 
                 max-width: 600px; /* Force small width for A4 Portrait */
                 margin: 0 auto; 
+            }
+
+            /* Worksheet Mode - Maximize piece size to fill 190mm (210mm width - 2cm margins) */
+            body.mode-print-sheet {
+                --piece-size: 47.5mm !important; /* 190mm / 4 = 47.5mm */
+            }
+            body.mode-print-sheet #printModal {
+                display: flex !important;
+                position: static !important;
+                background: transparent !important;
+                padding: 0 !important;
+                backdrop-filter: none !important;
+                box-shadow: none !important;
+                width: 100% !important;
+            }
+            body.mode-print-sheet .print-modal-box {
+                box-shadow: none !important;
+                padding: 0 !important;
+                max-width: 100% !important;
+                max-height: none !important;
+                width: 100% !important;
+                border: none !important;
+                background: transparent !important;
+            }
+            body.mode-print-sheet #print-sheet-content {
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: flex-start !important;
+                width: 100% !important;
+            }
+            body.mode-print-sheet .print-header {
+                margin-bottom: 4px !important;
+            }
+            body.mode-print-sheet .print-title {
+                font-size: 1.5rem !important;
+                margin-bottom: 2px !important;
+            }
+            body.mode-print-sheet .print-subtitle {
+                font-size: 0.85rem !important;
+                margin-bottom: 6px !important;
+            }
+            body.mode-print-sheet .print-color-legend {
+                margin-bottom: 10px !important;
+            }
+            body.mode-print-sheet #print-puzzle-grid {
+                display: grid !important;
+                grid-template-columns: repeat(4, 47.5mm) !important;
+                grid-template-rows: repeat(4, 47.5mm) !important;
+                width: 190mm !important;
+                height: 190mm !important;
+                margin: 0 auto !important;
+                box-sizing: content-box !important;
+                border: 2px solid #000000 !important;
+            }
+            body.mode-print-sheet .piece {
+                width: 47.5mm !important;
+                height: 47.5mm !important;
+                border: 1px solid #000000 !important;
+                box-sizing: border-box !important;
             }
         }
 
@@ -215,6 +315,7 @@
 
         <div class="toolbar">
             <button class="btn btn-outline" onclick="toggleHelp()">Rules</button>
+            <button class="btn btn-outline" onclick="openPrintModal()">Print Sheet</button>
             <button class="btn" onclick="resetPuzzle()">Reset Puzzle</button>
             <button class="btn btn-primary" onclick="initNewGame()">New Numbers</button>
         </div>
@@ -314,6 +415,32 @@
 
                 <h4>Disclaimer</h4>
                 <p>The game is provided "as is," without warranty of any kind. The author is not liable for any damages arising from the use of this software.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Printable Worksheet Modal -->
+    <div class="modal-overlay" id="printModal">
+        <div class="modal-box print-modal-box">
+            <div class="no-print" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="margin: 0; font-size: 1.2rem;">Printable Cut-Out Worksheet</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-primary" onclick="triggerPrintSheet()">Print / Save PDF</button>
+                    <button class="btn btn-outline" onclick="closePrintModal()">Close</button>
+                </div>
+            </div>
+            <div id="print-sheet-content">
+                <div class="print-header">
+                    <h1 class="print-title">Square Measurement Puzzle</h1>
+                    <p class="print-subtitle">Cut out the 16 puzzle pieces below along the outer lines. Reassemble them into a 4&times;4 grid so that touching edges match equivalent measurements!</p>
+                </div>
+                <div class="print-color-legend">
+                    <span><span class="dot" style="background:var(--u-blue)"></span>mm</span>
+                    <span><span class="dot" style="background:var(--u-red)"></span>cm</span>
+                    <span><span class="dot" style="background:var(--u-green)"></span>m</span>
+                    <span><span class="dot" style="background:var(--u-yellow)"></span>km</span>
+                </div>
+                <div id="print-puzzle-grid"></div>
             </div>
         </div>
     </div>
@@ -714,6 +841,8 @@
         document.getElementById('cert-date').innerText = now.toLocaleDateString();
         document.getElementById('cert-time').innerText = `${minutes}m ${seconds}s`;
 
+        document.body.classList.remove('mode-print-sheet');
+        document.body.classList.add('mode-certificate');
         document.getElementById('winModal').style.display = 'none';
         document.getElementById('game-ui').style.display = 'none';
         document.getElementById('certificate-view').style.display = 'flex';
@@ -722,6 +851,88 @@
     function toggleHelp() {
         const el = document.getElementById('helpModal');
         el.style.display = (el.style.display === 'flex') ? 'none' : 'flex';
+    }
+
+    // --- Printable Sheet Logic (No edges match layout) ---
+
+    function hasAnyMatchingAdjacentEdges(grid) {
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                // Check right neighbor
+                if (c < 3) {
+                    const eRight = grid[r][c].values[1]; // Right edge of current piece
+                    const eLeft = grid[r][c + 1].values[3]; // Left edge of right neighbor
+                    if (eRight.id !== 'border' && eRight.id === eLeft.id) {
+                        return true;
+                    }
+                }
+                // Check bottom neighbor
+                if (r < 3) {
+                    const eBottom = grid[r][c].values[2]; // Bottom edge of current piece
+                    const eTop = grid[r + 1][c].values[0]; // Top edge of bottom neighbor
+                    if (eBottom.id !== 'border' && eBottom.id === eTop.id) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    function getMismatchedLayout(piecesList) {
+        let pool = [...piecesList];
+        for (let attempt = 0; attempt < 2000; attempt++) {
+            pool.sort(() => Math.random() - 0.5);
+            let grid = [];
+            for (let r = 0; r < 4; r++) {
+                grid.push(pool.slice(r * 4, (r + 1) * 4));
+            }
+            if (!hasAnyMatchingAdjacentEdges(grid)) {
+                return grid;
+            }
+        }
+        return grid;
+    }
+
+    function generatePrintSheet() {
+        const gridContainer = document.getElementById('print-puzzle-grid');
+        gridContainer.innerHTML = '';
+
+        const gridData = getMismatchedLayout(pieces);
+
+        for (let r = 0; r < 4; r++) {
+            for (let c = 0; c < 4; c++) {
+                const pieceData = gridData[r][c];
+                // Display upright (rotation = 0) on the printable sheet
+                const pieceCopy = { ...pieceData, rotation: 0 };
+                const pieceEl = createPieceDOM(pieceCopy);
+                
+                pieceEl.style.position = 'relative';
+                pieceEl.style.left = '0';
+                pieceEl.style.top = '0';
+                pieceEl.style.boxShadow = 'none';
+                pieceEl.style.cursor = 'default';
+                pieceEl.style.zIndex = '1';
+
+                gridContainer.appendChild(pieceEl);
+            }
+        }
+    }
+
+    function openPrintModal() {
+        document.body.classList.remove('mode-certificate');
+        document.body.classList.add('mode-print-sheet');
+        generatePrintSheet();
+        document.getElementById('printModal').style.display = 'flex';
+    }
+
+    function closePrintModal() {
+        document.getElementById('printModal').style.display = 'none';
+        document.body.classList.remove('mode-print-sheet');
+    }
+
+    function triggerPrintSheet() {
+        window.print();
     }
 
     window.onload = () => { initNewGame(); toggleHelp(); };
